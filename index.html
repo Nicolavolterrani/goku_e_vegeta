@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combattimento Epico - Super Saiyan</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB 0%, #DEB887 70%, #8B4513 100%);
+            font-family: 'Arial Black', sans-serif;
+        }
+
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #87CEEB 0%, #DEB887 70%, #8B4513 100%);
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+            font-size: 28px;
+            text-align: center;
+            z-index: 10;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        .power-bar {
+            position: absolute;
+            top: 80px;
+            width: 300px;
+            height: 30px;
+            background: rgba(0,0,0,0.5);
+            border: 3px solid #FFD700;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .power-fill {
+            height: 100%;
+            background: linear-gradient(to right, #FF4500, #FFD700);
+            transition: width 0.3s;
+        }
+
+        #power1 {
+            left: 20px;
+        }
+
+        #power2 {
+            right: 20px;
+        }
+
+        .player-name {
+            position: absolute;
+            top: 50px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        #name1 {
+            left: 20px;
+        }
+
+        #name2 {
+            right: 20px;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Caricamento...</div>
+    <div id="info" style="display:none;">SCONTRO EPICO!</div>
+    <div id="name1" class="player-name">TU</div>
+    <div id="name2" class="player-name">AMICO</div>
+    <div id="power1" class="power-bar"><div class="power-fill" style="width: 100%"></div></div>
+    <div id="power2" class="power-bar"><div class="power-fill" style="width: 100%"></div></div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const info = document.getElementById('info');
+        const loading = document.getElementById('loading');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Carica le immagini
+        const img1 = new Image();
+        const img2 = new Image();
+        let imagesLoaded = 0;
+
+        // INSERISCI QUI LE TUE IMMAGINI IN BASE64
+        // Per utilizzare questo codice su GitHub, dovrai convertire le tue foto in base64
+        // Oppure caricarle in una cartella e usare il percorso relativo
+        img1.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='; // Placeholder
+        img2.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='; // Placeholder
+
+        img1.onload = img2.onload = () => {
+            imagesLoaded++;
+            if (imagesLoaded === 2) {
+                loading.style.display = 'none';
+                info.style.display = 'block';
+                animate();
+            }
+        };
+
+        // Stato del combattimento
+        let phase = 'fight';
+        let phaseTime = 0;
+        let animTime = 0;
+
+        // Personaggi con proporzioni più realistiche
+        const player1 = {
+            x: canvas.width * 0.3,
+            y: canvas.height * 0.5,
+            vx: 0,
+            vy: 0,
+            width: 60,
+            height: 120,
+            color: '#FF6B00',
+            hairColor: '#000',
+            superSaiyan: false,
+            attacking: false,
+            power: 100,
+            rotation: 0,
+            scale: 1
+        };
+
+        const player2 = {
+            x: canvas.width * 0.7,
+            y: canvas.height * 0.5,
+            vx: 0,
+            vy: 0,
+            width: 60,
+            height: 120,
+            color: '#0066FF',
+            hairColor: '#000',
+            superSaiyan: false,
+            attacking: false,
+            power: 100,
+            rotation: 0,
+            scale: 1
+        };
+
+        // Particelle di energia
+        const particles = [];
+        const aura = [];
+        const lightning = [];
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 10;
+                this.vy = (Math.random() - 0.5) * 10 - 2;
+                this.life = 1;
+                this.color = color;
+                this.size = Math.random() * 10 + 5;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= 0.015;
+                this.vy -= 0.2;
+                this.vx *= 0.98;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size);
+                gradient.addColorStop(0, this.color);
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class AuraParticle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.baseX = x;
+                this.baseY = y;
+                this.angle = Math.random() * Math.PI * 2;
+                this.radius = Math.random() * 50 + 30;
+                this.speed = Math.random() * 0.08 + 0.04;
+                this.color = color;
+                this.size = Math.random() * 8 + 4;
+                this.life = 1;
+            }
+
+            update() {
+                this.angle += this.speed;
+                this.x = this.baseX + Math.cos(this.angle) * this.radius;
+                this.y = this.baseY + Math.sin(this.angle) * this.radius - this.radius * 0.5;
+                this.life -= 0.01;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.min(0.7, this.life);
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 2);
+                gradient.addColorStop(0, this.color);
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class Lightning {
+            constructor(x1, y1, x2, y2) {
+                this.points = this.generateLightning(x1, y1, x2, y2);
+                this.life = 1;
+            }
+
+            generateLightning(x1, y1, x2, y2) {
+                const points = [{x: x1, y: y1}];
+                const segments = 8;
+                const displacement = 30;
+                
+                for (let i = 1; i < segments; i++) {
+                    const t = i / segments;
+                    points.push({
+                        x: x1 + (x2 - x1) * t + (Math.random() - 0.5) * displacement,
+                        y: y1 + (y2 - y1) * t + (Math.random() - 0.5) * displacement
+                    });
+                }
+                points.push({x: x2, y: y2});
+                return points;
+            }
+
+            update() {
+                this.life -= 0.1;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#FFD700';
+                
+                ctx.beginPath();
+                ctx.moveTo(this.points[0].x, this.points[0].y);
+                for (let i = 1; i < this.points.length; i++) {
+                    ctx.lineTo(this.points[i].x, this.points[i].y);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        // Disegna montagne rocciose più dettagliate
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#4A90E2');
+            gradient.addColorStop(0.4, '#87CEEB');
+            gradient.addColorStop(0.7, '#D2B48C');
+            gradient.addColorStop(1, '#8B7355');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Nuvole
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            for (let i = 0; i < 5; i++) {
+                const x = (canvas.width / 5) * i + (animTime * 0.2) % canvas.width - canvas.width * 0.2;
+                const y = 50 + i * 40;
+                ctx.beginPath();
+                ctx.arc(x, y, 40, 0, Math.PI * 2);
+                ctx.arc(x + 30, y, 50, 0, Math.PI * 2);
+                ctx.arc(x + 60, y, 40, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Montagne con ombre
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 20;
+            
+            ctx.fillStyle = '#5A5A5A';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            for (let i = 0; i <= 12; i++) {
+                const x = (canvas.width / 12) * i;
+                const y = canvas.height * 0.55 + Math.sin(i * 0.6) * 120 - 80;
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.fill();
+
+            ctx.fillStyle = '#3A3A3A';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            for (let i = 0; i <= 10; i++) {
+                const x = (canvas.width / 10) * i + 60;
+                const y = canvas.height * 0.65 + Math.cos(i * 0.9) * 100;
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+
+            // Terreno con texture
+            ctx.fillStyle = '#6B5D4F';
+            ctx.fillRect(0, canvas.height * 0.8, canvas.width, canvas.height * 0.2);
+            
+            // Rocce sparse
+            ctx.fillStyle = '#4A4A4A';
+            for (let i = 0; i < 20; i++) {
+                const x = (canvas.width / 20) * i + (i * 13) % 50;
+                const y = canvas.height * 0.82;
+                const size = 10 + (i % 3) * 8;
+                ctx.fillRect(x, y, size, size * 0.7);
+            }
+        }
+
+        // Disegna personaggio realistico con foto
+        function drawCharacter(player, img, flipped = false) {
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            
+            if (flipped) ctx.scale(-1, 1);
+
+            // Aura Super Saiyan più intensa
+            if (player.superSaiyan) {
+                const auraSize = 80 + Math.sin(animTime * 0.15) * 15;
+                const auraGradient = ctx.createRadialGradient(0, -20, 10, 0, -20, auraSize);
+                auraGradient.addColorStop(0, 'rgba(255, 223, 0, 0.8)');
+                auraGradient.addColorStop(0.4, 'rgba(255, 255, 0, 0.5)');
+                auraGradient.addColorStop(0.7, 'rgba(255, 200, 0, 0.3)');
+                auraGradient.addColorStop(1, 'rgba(255, 255, 0, 0)');
+                ctx.fillStyle = auraGradient;
+                ctx.beginPath();
+                ctx.arc(0, -20, auraSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Scintille elettriche
+                if (animTime % 3 === 0 && Math.random() > 0.7) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 50 + Math.random() * 30;
+                    lightning.push(new Lightning(
+                        0, -20,
+                        Math.cos(angle) * dist,
+                        -20 + Math.sin(angle) * dist
+                    ));
+                }
+            }
+
+            ctx.scale(player.scale, player.scale);
+            ctx.rotate(player.rotation);
+
+            // Corpo (gi in stile DBZ con muscoli)
+            ctx.fillStyle = player.color;
+            
+            // Torso muscoloso
+            ctx.beginPath();
+            ctx.moveTo(-20, -15);
+            ctx.lineTo(-25, 0);
+            ctx.lineTo(-22, 20);
+            ctx.lineTo(-15, 35);
+            ctx.lineTo(15, 35);
+            ctx.lineTo(22, 20);
+            ctx.lineTo(25, 0);
+            ctx.lineTo(20, -15);
+            ctx.closePath();
+            ctx.fill();
+
+            // Dettagli muscoli
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.lineTo(0, 30);
+            ctx.stroke();
+
+            // Braccia
+            if (player.attacking) {
+                // Braccio esteso in avanti
+                ctx.fillRect(20, -5, 35, 15);
+                ctx.fillStyle = '#FFE0BD';
+                ctx.beginPath();
+                ctx.arc(55, 3, 10, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Effetto energia sul pugno
+                const energyGradient = ctx.createRadialGradient(55, 3, 5, 55, 3, 20);
+                energyGradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+                energyGradient.addColorStop(1, 'rgba(255, 200, 0, 0)');
+                ctx.fillStyle = energyGradient;
+                ctx.beginPath();
+                ctx.arc(55, 3, 20, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = player.color;
+                ctx.fillRect(-25, 10, 15, 35);
+                ctx.fillRect(10, 10, 15, 35);
+            }
+
+            // Gambe
+            ctx.fillStyle = player.color;
+            ctx.fillRect(-18, 35, 14, 40);
+            ctx.fillRect(4, 35, 14, 40);
+
+            // Scarpe
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(-20, 72, 16, 10);
+            ctx.fillRect(2, 72, 16, 10);
+            
+            // Dettagli scarpe
+            ctx.fillStyle = player.color;
+            ctx.fillRect(-18, 74, 12, 3);
+            ctx.fillRect(4, 74, 12, 3);
+
+            // Testa con foto
+            const headSize = 32;
+            
+            // Alone dietro la testa se Super Saiyan
+            if (player.superSaiyan) {
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.6)';
+                ctx.beginPath();
+                ctx.arc(0, -35, headSize + 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Disegna la foto circolare
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(0, -35, headSize, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            
+            // Effetto glow se Super Saiyan
+            if (player.superSaiyan) {
+                ctx.shadowColor = '#FFD700';
+                ctx.shadowBlur = 20;
+            }
+            
+            if (flipped) {
+                ctx.scale(-1, 1);
+            }
+            ctx.drawImage(img, -headSize, -35 - headSize, headSize * 2, headSize * 2);
+            ctx.restore();
+
+            // Capelli Super Saiyan sopra la foto
+            if (player.superSaiyan) {
+                ctx.fillStyle = '#FFD700';
+                ctx.shadowColor = '#FFF';
+                ctx.shadowBlur = 15;
+                
+                // Capelli a punta dritti
+                ctx.beginPath();
+                ctx.moveTo(-25, -55);
+                ctx.lineTo(-18, -80);
+                ctx.lineTo(-12, -75);
+                ctx.lineTo(-6, -85);
+                ctx.lineTo(0, -90);
+                ctx.lineTo(6, -85);
+                ctx.lineTo(12, -78);
+                ctx.lineTo(18, -82);
+                ctx.lineTo(25, -55);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.restore();
+        }
+
+        // Crea esplosione di energia
+        function createExplosion(x, y, color, intensity = 1) {
+            const count = Math.floor(40 * intensity);
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // Crea aura
+        function createAura(player) {
+            const color = player.superSaiyan ? '#FFD700' : player.color;
+            for (let i = 0; i < 3; i++) {
+                aura.push(new AuraParticle(player.x, player.y, color));
+            }
+        }
+
+        // Shake dello schermo
+        let screenShake = 0;
+        function updateScreenShake() {
+            if (screenShake > 0) {
+                screenShake *= 0.9;
+                if (screenShake < 0.1) screenShake = 0;
+            }
+        }
+
+        // Aggiorna combattimento
+        function updateFight() {
+            phaseTime++;
+            animTime++;
+
+            if (phase === 'fight') {
+                if (phaseTime < 200) {
+                    // Scambio di colpi dinamico
+                    if (phaseTime % 25 === 0) {
+                        player1.attacking = !player1.attacking;
+                        player2.attacking = !player2.attacking;
+                        const midX = (player1.x + player2.x) / 2;
+                        const midY = (player1.y + player2.y) / 2;
+                        createExplosion(midX, midY, '#FFA500', 1.5);
+                        screenShake = 10;
+                    }
+                    
+                    const t = phaseTime * 0.08;
+                    player1.x = canvas.width * 0.38 + Math.sin(t) * 40;
+                    player2.x = canvas.width * 0.62 + Math.cos(t) * 40;
+                    player1.y = canvas.height * 0.45 + Math.cos(t * 1.3) * 25;
+                    player2.y = canvas.height * 0.45 + Math.sin(t * 1.3) * 25;
+                    
+                    player1.rotation = Math.sin(t) * 0.1;
+                    player2.rotation = Math.cos(t) * 0.1;
+                    
+                } else if (phaseTime < 270) {
+                    // Spinta potente
+                    const progress = (phaseTime - 200) / 70;
+                    const dist = progress * 350;
+                    player1.x = canvas.width * 0.5 - dist;
+                    player2.x = canvas.width * 0.5 + dist;
+                    player1.attacking = false;
+                    player2.attacking = false;
+                    player1.scale = 1 - progress * 0.2;
+                    player2.scale = 1 - progress * 0.2;
+                    
+                    if (phaseTime === 200) {
+                        createExplosion(canvas.width / 2, canvas.height / 2, '#FF0000', 3);
+                        screenShake = 20;
+                    }
+                } else {
+                    phase = 'transform';
+                    phaseTime = 0;
+                    info.textContent = 'È ORA DI TRASFORMARSI!';
+                    player1.scale = 1;
+                    player2.scale = 1;
+                }
+            } else if (phase === 'transform') {
+                if (phaseTime < 150) {
+                    player1.y = canvas.height * 0.45 + Math.sin(phaseTime * 0.15) * 8;
+                    player2.y = canvas.height * 0.45 + Math.sin(phaseTime * 0.15) * 8;
+                    
+                    if (phaseTime % 3 === 0) {
+                        createAura(player1);
+                        createAura(player2);
+                    }
+                    
+                    if (phaseTime > 100) {
+                        screenShake = 5 + (phaseTime - 100) * 0.2;
+                    }
+                } else if (phaseTime === 150) {
+                    player1.superSaiyan = true;
+                    player2.superSaiyan = true;
+                    info.textContent = 'SUPER SAIYAN!!!';
+                    createExplosion(player1.x, player1.y, '#FFD700', 4);
+                    createExplosion(player2.x, player2.y, '#FFD700', 4);
+                    screenShake = 30;
+                } else if (phaseTime > 220) {
+                    phase = 'supersaiyan';
+                    phaseTime = 0;
+                    info.textContent = 'BATTAGLIA SUPER SAIYAN!';
+                }
+            } else if (phase === 'supersaiyan') {
+                if (phaseTime < 300) {
+                    // Combattimento velocissimo
+                    if (phaseTime % 12 === 0) {
+                        player1.attacking = !player1.attacking;
+                        player2.attacking = !player2.attacking;
+                        const midX = (player1.x + player2.x) / 2;
+                        const midY = (player1.y + player2.y) / 2;
+                        createExplosion(midX, midY, '#FFD700', 2);
+                        screenShake = 8;
+                    }
+                    
+                    const t = phaseTime * 0.2;
+                    player1.x = canvas.width * 0.3 + Math.sin(t) * 80;
+                    player2.x = canvas.width * 0.7 + Math.cos(t) * 80;
+                    player1.y = canvas.height * 0.35 + Math.cos(t * 1.5) * 50;
+                    player2.y = canvas.height * 0.35 + Math.sin(t * 1.5) * 50;
+                    
+                    player1.rotation = Math.sin(t) * 0.15;
+                    player2.rotation = Math.cos(t) * 0.15;
+                    
+                    if (phaseTime % 5 === 0) {
+                        createAura(player1);
+                        createAura(player2);
+                    }
+                } else {
+                    phase = 'fight';
+                    phaseTime = 0;
+                    player1.superSaiyan = false;
+                    player2.superSaiyan = false;
+                    player1.x = canvas.width * 0.3;
+                    player2.x = canvas.width * 0.7;
+                    player1.y = canvas.height * 0.5;
+                    player2.y = canvas.height * 0.5;
+                    player1.rotation = 0;
+                    player2.rotation = 0;
+                    info.textContent = 'ANCORA UNA VOLTA!';
+                }
+            }
+
+            // Aggiorna particelle
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            for (let i = aura.length - 1; i >= 0; i--) {
+                aura[i].update();
+                if (aura[i].life <= 0) {
+                    aura.splice(i, 1);
+                }
+            }
+
+            for (let i = lightning.length - 1; i >= 0; i--) {
+                lightning[i].update();
+                if (lightning[i].life <= 0) {
+                    lightning.splice(i, 1);
+                }
+            }
+
+            updateScreenShake();
+        }
+
+        // Loop di animazione
+        function animate() {
+            ctx.save();
+            
+            // Applica screen shake
+            if (screenShake > 0) {
+                ctx.translate(
+                    (Math.random() - 0.5) * screenShake,
+                    (Math.random() - 0.5) * screenShake
+                );
+            }
+            
+            drawBackground();
+            
+            // Disegna fulmini
+            lightning.forEach(l => l.draw());
+            
+            // Disegna aura
+            aura.forEach(p => p.draw());
+            
+            // Disegna particelle
+            particles.forEach(p => p.draw());
+            
+            // Disegna personaggi
+            drawCharacter(player1, img1, false);
+            drawCharacter(player2, img2, true);
+            
+            ctx.restore();
+            
+            updateFight();
+            
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
